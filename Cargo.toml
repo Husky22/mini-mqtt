@@ -14,6 +14,7 @@ tokio-util = { version = "0.7.10", features = ["full"] }
 tokio-stream = { version = "0.1.14", features = ["full"] }
 futures = "0.3.30"
 bytes = "1.5.0"
+rand = "0.8"
 
 [[bin]]
 name="server"
