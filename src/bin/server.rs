@@ -10,15 +10,14 @@ use futures::{
     stream::{SplitSink, SplitStream},
     StreamExt,
 };
+use std::time::Instant;
 use tokio::sync::mpsc;
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::mpsc::UnboundedSender,
-    sync::Mutex
+    sync::Mutex,
 };
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
-use std::time::Instant;
-
 
 use mini_mqtt::message::*;
 
@@ -37,7 +36,7 @@ enum Command {
         topic: Topic,
     },
     Unsubscribe {
-        connection_id: ConnectionId,
+        i: usize,
         topic: Topic,
     },
     Publish {
@@ -48,7 +47,7 @@ enum Command {
 struct Connection {
     writer: Writer,
     connected: bool,
-    connection_id: ConnectionId
+    connection_id: ConnectionId,
 }
 
 type ConnectionId = String;
@@ -66,23 +65,20 @@ async fn main() -> Result<()> {
 
     tokio::spawn(async move {
         let mut writers: HashMap<ConnectionId, Connection> = HashMap::new();
-        let mut connecion_ids: Vec<ConnectionId> = Vec::new() ;
+        let mut connecion_ids: Vec<ConnectionId> = Vec::new();
         let topics: Arc<Mutex<HashMap<Topic, HashSet<ConnectionId>>>> =
             Arc::new(Mutex::new(HashMap::new()));
         let mut disconnected: HashSet<ConnectionId> = HashSet::new();
-        let mut i = 0;
+        let mut msg_count = 0;
         let start_time = Instant::now();
         while let Some(cmd) = rx.recv().await {
-            i += 1;
-            if i % 10000 == 0 {
-                println!("{} cmds / s", i / start_time.elapsed().as_secs());
+            msg_count += 1;
+            if msg_count % 10000 == 0 {
+                println!("{} cmds / s", msg_count / start_time.elapsed().as_secs());
             }
             let topics = Arc::clone(&topics);
             match cmd {
-                Command::Connect {
-                    connection_id,
-                    i
-                } => {
+                Command::Connect { connection_id, i } => {
                     connecion_ids.push(connection_id.clone());
                     if let Some(mut con) = writers.remove(&i.to_string()) {
                         con.connection_id = connection_id.clone();
@@ -90,14 +86,18 @@ async fn main() -> Result<()> {
                         writers.insert(connection_id.clone(), con);
                         dbg!("Connected {}", connection_id);
                     };
-                },
-                Command::NewWriter {
-                    writer,
-                    i
-                } => {
+                }
+                Command::NewWriter { writer, i } => {
                     // dbg!("New connection {}", i);
-                    writers.insert(i.to_string(), Connection{ writer, connected: false, connection_id: i.to_string() });
-                },
+                    writers.insert(
+                        i.to_string(),
+                        Connection {
+                            writer,
+                            connected: false,
+                            connection_id: i.to_string(),
+                        },
+                    );
+                }
                 Command::Publish { msg } => {
                     let tpcs = topics.lock().await;
                     if let Some(cons) = tpcs.get(&msg.topic) {
@@ -110,15 +110,10 @@ async fn main() -> Result<()> {
                             } else {
                                 disconnected.insert(con.clone());
                             }
-                        };
-
-
+                        }
                     };
-                },
-                Command::Subscribe {
-                    i,
-                    topic,
-                } => {
+                }
+                Command::Subscribe { i, topic } => {
                     if let Some(connection_id) = connecion_ids.get(i) {
                         // dbg!("Subscribe {} to {}", connection_id, topic.clone());
                         match topics.lock().await.entry(topic) {
@@ -130,16 +125,18 @@ async fn main() -> Result<()> {
                             }
                         }
                     }
-                },
-                Command::Unsubscribe {
-                    connection_id,
-                    topic,
-                } => match topics.lock().await.entry(topic) {
-                    Entry::Vacant(_) => (),
-                    Entry::Occupied(o) => {
-                        o.into_mut().remove(&connection_id);
+                }
+                Command::Unsubscribe { i, topic } => {
+                    if let Some(connection_id) = connecion_ids.get(i) {
+                        println!("Unsubscribe");
+                        match topics.lock().await.entry(topic) {
+                            Entry::Vacant(_) => (),
+                            Entry::Occupied(o) => {
+                                o.into_mut().remove(connection_id);
+                            }
+                        }
                     }
-                },
+                }
             }
         }
     });
@@ -150,16 +147,12 @@ async fn main() -> Result<()> {
         let tx2 = tx.clone();
         let transport = Framed::new(stream, LengthDelimitedCodec::new());
         let (writer, reader) = transport.split();
-        tx2.send(Command::NewWriter { i, writer})?;
+        tx2.send(Command::NewWriter { i, writer })?;
         tokio::spawn(async move { process_reader(reader, tx2, i).await });
         i += 1;
     }
 }
-async fn process_reader(
-    mut reader: Reader,
-    tx: UnboundedSender<Command>,
-    i: usize,
-) -> Result<()> {
+async fn process_reader(mut reader: Reader, tx: UnboundedSender<Command>, i: usize) -> Result<()> {
     println!("Started process reader");
     while let Some(frame) = reader.next().await {
         let frame = frame.context("Frame from transport")?;
@@ -169,12 +162,20 @@ async fn process_reader(
 
         match msg.message_type {
             MessageType::Publish => tx.send(Command::Publish { msg: msg.clone() })?,
-            MessageType::Subscribe => tx.send(Command::Subscribe { i, topic: msg.topic.clone() })?,
-            MessageType::Unsubscribe => todo!(),
-            MessageType::Connect=> tx.send(Command::Connect { connection_id: msg.message.clone(), i})?
+            MessageType::Subscribe => tx.send(Command::Subscribe {
+                i,
+                topic: msg.topic.clone(),
+            })?,
+            MessageType::Unsubscribe => tx.send(Command::Unsubscribe {
+                i,
+                topic: msg.topic.clone(),
+            })?,
+            MessageType::Connect => tx.send(Command::Connect {
+                connection_id: msg.message.clone(),
+                i,
+            })?,
         }
         // dbg!("{:?}", msg);
     }
     Ok(())
 }
-

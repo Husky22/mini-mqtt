@@ -1,13 +1,13 @@
 use bytes::Bytes;
-use eyre::{ Context, Result};
+use eyre::{Context, Result};
 use futures::sink::SinkExt;
+use futures::{stream::SplitStream, StreamExt};
+use rand::prelude::*;
 use tokio::{
-    net::{TcpStream},
+    net::TcpStream,
     time::{sleep, Duration},
 };
-use futures::{StreamExt, stream::SplitStream};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
-use rand::prelude::*;
 
 use mini_mqtt::message::*;
 
@@ -18,7 +18,7 @@ async fn main() -> Result<()> {
     let (mut writer, reader) = transport.split();
     // load the frame into a Vec<u8>
     let mut rng = rand::thread_rng();
-    let n:usize = rng.gen_range(0..=100);
+    let n: usize = rng.gen_range(0..=100);
     let message = format!("Client {}", n).as_bytes().to_owned();
     let topic = "Ping".as_bytes().to_owned();
     let msg = MessageRaw {
@@ -41,7 +41,8 @@ async fn main() -> Result<()> {
     tokio::spawn(async move {
         listen_for_messages(reader).await.unwrap();
     });
-    loop {
+    for _ in 0..10 {
+
         let topic = "Ping".as_bytes().to_owned();
         let msg = MessageRaw {
             message_type: MessageType::Publish,
@@ -50,13 +51,26 @@ async fn main() -> Result<()> {
             message: format!("Hi from {}", n).as_bytes().to_owned(),
         };
         let msg_b: Vec<u8> = msg.try_into().unwrap();
+        println!("{}", msg_b.len());
         println!("Send");
         writer.send(Bytes::from(msg_b)).await?;
+        sleep(Duration::from_secs(1)).await;
     }
-
+    let topic = "Ping".as_bytes().to_owned();
+    let msg = MessageRaw {
+        message_type: MessageType::Unsubscribe,
+        topic_length: topic.len() as u8,
+        topic,
+        message: "".as_bytes().to_owned(),
+    };
+    let msg_b: Vec<u8> = msg.try_into().unwrap();
+    writer.send(Bytes::from(msg_b)).await?;
+    Ok(())
 }
 
-async fn listen_for_messages(mut transport: SplitStream<Framed<TcpStream, LengthDelimitedCodec>>) -> Result<()> {
+async fn listen_for_messages(
+    mut transport: SplitStream<Framed<TcpStream, LengthDelimitedCodec>>,
+) -> Result<()> {
     while let Some(frame) = transport.next().await {
         let frame = frame.context("Frame from transport")?;
         let msg: Message = Message::try_from(
