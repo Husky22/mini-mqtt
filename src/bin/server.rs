@@ -12,7 +12,6 @@ use futures::{
 };
 use tokio::sync::mpsc;
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
     sync::mpsc::UnboundedSender,
     sync::Mutex
@@ -65,10 +64,10 @@ async fn main() -> Result<()> {
     let listener = TcpListener::bind("127.0.0.1:1884").await?;
     let (tx, mut rx) = mpsc::unbounded_channel();
 
-    let connection_manager = tokio::spawn(async move {
+    tokio::spawn(async move {
         let mut writers: HashMap<ConnectionId, Connection> = HashMap::new();
         let mut connecion_ids: Vec<ConnectionId> = Vec::new() ;
-        let mut topics: Arc<Mutex<HashMap<Topic, HashSet<ConnectionId>>>> =
+        let topics: Arc<Mutex<HashMap<Topic, HashSet<ConnectionId>>>> =
             Arc::new(Mutex::new(HashMap::new()));
         let mut disconnected: HashSet<ConnectionId> = HashSet::new();
         let mut i = 0;
@@ -136,7 +135,7 @@ async fn main() -> Result<()> {
                     connection_id,
                     topic,
                 } => match topics.lock().await.entry(topic) {
-                    Entry::Vacant(v) => (),
+                    Entry::Vacant(_) => (),
                     Entry::Occupied(o) => {
                         o.into_mut().remove(&connection_id);
                     }
@@ -149,8 +148,8 @@ async fn main() -> Result<()> {
     loop {
         let (stream, _) = listener.accept().await?;
         let tx2 = tx.clone();
-        let mut transport = Framed::new(stream, LengthDelimitedCodec::new());
-        let (mut writer, mut reader) = transport.split();
+        let transport = Framed::new(stream, LengthDelimitedCodec::new());
+        let (writer, reader) = transport.split();
         tx2.send(Command::NewWriter { i, writer})?;
         tokio::spawn(async move { process_reader(reader, tx2, i).await });
         i += 1;

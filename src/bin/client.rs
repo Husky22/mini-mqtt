@@ -1,26 +1,21 @@
 use bytes::Bytes;
-use deku::DekuWrite;
-use eyre::{bail, Context, Result};
+use eyre::{ Context, Result};
 use futures::sink::SinkExt;
 use tokio::{
-    io::{AsyncRead, AsyncReadExt, AsyncSeek, AsyncSeekExt, AsyncWrite, BufReader},
-    net::{TcpListener, TcpStream},
+    net::{TcpStream},
     time::{sleep, Duration},
 };
 use futures::{StreamExt, stream::SplitStream};
-use tokio_util::{
-    bytes::BufMut,
-    codec::{Framed, LengthDelimitedCodec},
-};
+use tokio_util::codec::{Framed, LengthDelimitedCodec};
 use rand::prelude::*;
 
 use mini_mqtt::message::*;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut stream = TcpStream::connect("127.0.0.1:1884").await?;
-    let mut transport = Framed::new(stream, LengthDelimitedCodec::new());
-    let (mut writer, mut reader) = transport.split();
+    let stream = TcpStream::connect("127.0.0.1:1884").await?;
+    let transport = Framed::new(stream, LengthDelimitedCodec::new());
+    let (mut writer, reader) = transport.split();
     // load the frame into a Vec<u8>
     let mut rng = rand::thread_rng();
     let n:usize = rng.gen_range(0..=100);
@@ -59,7 +54,6 @@ async fn main() -> Result<()> {
         writer.send(Bytes::from(msg_b)).await?;
     }
 
-    Ok(())
 }
 
 async fn listen_for_messages(mut transport: SplitStream<Framed<TcpStream, LengthDelimitedCodec>>) -> Result<()> {
