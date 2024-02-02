@@ -179,8 +179,3 @@ async fn process_reader(
     Ok(())
 }
 
-async fn process_writer(
-    mut writer: SplitSink<Framed<TcpStream, LengthDelimitedCodec>, Bytes>,
-) -> Result<()> {
-    Ok(())
-}

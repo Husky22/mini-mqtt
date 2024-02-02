@@ -24,7 +24,7 @@ async fn main() -> Result<()> {
     // load the frame into a Vec<u8>
     let mut rng = rand::thread_rng();
     let n:usize = rng.gen_range(0..=100);
-    let message = format!("Niklas {}", n).as_bytes().to_owned();
+    let message = format!("Client {}", n).as_bytes().to_owned();
     let topic = "Ping".as_bytes().to_owned();
     let msg = MessageRaw {
         message_type: MessageType::Connect,
@@ -52,7 +52,7 @@ async fn main() -> Result<()> {
             message_type: MessageType::Publish,
             topic_length: topic.len() as u8,
             topic,
-            message: format!("Hi {}", n).as_bytes().to_owned(),
+            message: format!("Hi from {}", n).as_bytes().to_owned(),
         };
         let msg_b: Vec<u8> = msg.try_into().unwrap();
         println!("Send");
