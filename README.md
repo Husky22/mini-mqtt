@@ -12,5 +12,5 @@ The message is as follows:
 Message { message_type: Publish, topic: "Ping", message: "Hi from 6" }
 ```
 There is significant room for performance enhancement, potentially through the application of multithreading techniques and more efficient memory management.
-Especially by avoiding Arc<Mutex> on the topic HashMap.
+Especially by avoiding ArcMutex on the topic HashMap.
 Given that the majority of operations involve reading from the hashmap, and only a minority (subscribe/unsubscribe requests) modify it, there may be more efficient concurrency solutions that could further optimize performance.
