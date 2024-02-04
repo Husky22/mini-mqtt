@@ -13,12 +13,14 @@ use mini_mqtt::message::*;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+
     let stream = TcpStream::connect("127.0.0.1:1884").await?;
     let transport = Framed::new(stream, LengthDelimitedCodec::new());
     let (mut writer, reader) = transport.split();
-    // load the frame into a Vec<u8>
+
     let mut rng = rand::thread_rng();
     let n: usize = rng.gen_range(0..=100);
+
     let message = format!("Client {}", n).as_bytes().to_owned();
     let topic = "Ping".as_bytes().to_owned();
     let msg = MessageRaw {
@@ -41,7 +43,7 @@ async fn main() -> Result<()> {
     tokio::spawn(async move {
         listen_for_messages(reader).await.unwrap();
     });
-    for _ in 0..10 {
+    loop {
 
         let topic = "Ping".as_bytes().to_owned();
         let msg = MessageRaw {
@@ -51,21 +53,21 @@ async fn main() -> Result<()> {
             message: format!("Hi from {}", n).as_bytes().to_owned(),
         };
         let msg_b: Vec<u8> = msg.try_into().unwrap();
-        println!("{}", msg_b.len());
-        println!("Send");
+        // println!("{}", msg_b.len());
+        // println!("Send");
         writer.send(Bytes::from(msg_b)).await?;
-        sleep(Duration::from_secs(1)).await;
+        // sleep(Duration::from_secs(1)).await;
     }
-    let topic = "Ping".as_bytes().to_owned();
-    let msg = MessageRaw {
-        message_type: MessageType::Unsubscribe,
-        topic_length: topic.len() as u8,
-        topic,
-        message: "".as_bytes().to_owned(),
-    };
-    let msg_b: Vec<u8> = msg.try_into().unwrap();
-    writer.send(Bytes::from(msg_b)).await?;
-    Ok(())
+    // let topic = "Ping".as_bytes().to_owned();
+    // let msg = MessageRaw {
+    //     message_type: MessageType::Unsubscribe,
+    //     topic_length: topic.len() as u8,
+    //     topic,
+    //     message: "".as_bytes().to_owned(),
+    // };
+    // let msg_b: Vec<u8> = msg.try_into().unwrap();
+    // writer.send(Bytes::from(msg_b)).await?;
+    // Ok(())
 }
 
 async fn listen_for_messages(
@@ -76,7 +78,7 @@ async fn listen_for_messages(
         let msg: Message = Message::try_from(
             MessageRaw::try_from(frame.as_ref()).context("Parsing Bytes to Msg")?,
         )?;
-        println!("{:?}", msg);
+        // println!("{:?}", msg);
     }
     Ok(())
 }
