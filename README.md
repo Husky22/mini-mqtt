@@ -21,8 +21,7 @@ Message { message_type: Publish, topic: "Ping", message: "Hi from 6" }
 ```
 
 The performance deteriorates pretty quickly as I add more clients to 30k msg/s for 3 clients. I will continue to inspect this issue. Because as soon as I disconnect all the clients, the 
-performace rises to 250k msg/s.
-So there should still be room for performance improvement.
+performace rises to 250k msg/s, there should still be room for performance improvement.
 
 ## ToDo
 
